@@ -1,6 +1,29 @@
 import math, cmath
 from cubic_solver import solve_cubic, solve_quadratic, sqrt_trigonometric
 
+def get_distinct_roots(roots, tolerance=1e-10):
+    """
+    Extract distinct roots with their multiplicities from a list of roots.
+    Returns list of (root, multiplicity) tuples.
+    """
+    from collections import defaultdict
+    
+    distinct_roots = defaultdict(int)
+    
+    for root in roots:
+        # Find if this root is close to any existing distinct root
+        found = False
+        for distinct_root in distinct_roots:
+            if abs(root - distinct_root) < tolerance:
+                distinct_roots[distinct_root] += 1
+                found = True
+                break
+        
+        if not found:
+            distinct_roots[root] += 1
+    
+    return [(root, mult) for root, mult in distinct_roots.items()]
+
 def solve_quartic(a, b, c, d, e):
     """Solve a*x^4 + b*x^3 + c*x^2 + d*x + e = 0.
     Returns a list of 4 roots (real numbers or complex numbers) with multiplicity.
@@ -286,8 +309,26 @@ def solve_biquadratic(P, R, shift):
         # Perfect square case: (y^2 + P/2)^2 = 0, double root with multiplicity 2 each
         z = -P/2
         sqrt_z = sqrt_trigonometric(z + 0j)
+        
+        # Clean up floating point noise in the square root
+        if isinstance(sqrt_z, complex):
+            real_part = sqrt_z.real if abs(sqrt_z.real) > 1e-12 else 0.0
+            imag_part = sqrt_z.imag if abs(sqrt_z.imag) > 1e-12 else 0.0
+            sqrt_z_clean = complex(real_part, imag_part)
+        else:
+            sqrt_z_clean = sqrt_z if abs(sqrt_z) > 1e-12 else 0.0
+        
         # Return all 4 roots with multiplicity: each sqrt appears twice
-        roots = [sqrt_z + shift, sqrt_z + shift, -sqrt_z + shift, -sqrt_z + shift]
+        pos_root = sqrt_z_clean + shift
+        neg_root = -sqrt_z_clean + shift
+        
+        # Ensure clean representation for pure imaginary numbers
+        if isinstance(neg_root, complex) and abs(neg_root.real) < 1e-12:
+            neg_root = complex(0.0, neg_root.imag)
+        if isinstance(pos_root, complex) and abs(pos_root.real) < 1e-12:
+            pos_root = complex(0.0, pos_root.imag)
+            
+        roots = [pos_root, pos_root, neg_root, neg_root]
     else:
         # Regular case: return all 4 roots from both z values
         for z in z_roots:
@@ -316,7 +357,25 @@ def solve_biquadratic(P, R, shift):
                     # z ≈ 0, double root at origin  
                     roots.extend([shift, shift])
     
-    return roots
+    # Clean up all roots to remove floating point noise
+    cleaned_roots = []
+    for root in roots:
+        if isinstance(root, complex):
+            real_part = root.real if abs(root.real) > 1e-12 else 0.0
+            imag_part = root.imag if abs(root.imag) > 1e-12 else 0.0
+            # Handle pure imaginary numbers properly
+            if abs(real_part) < 1e-12 and abs(imag_part) > 1e-12:
+                cleaned_roots.append(complex(0.0, imag_part))
+            elif abs(imag_part) < 1e-12 and abs(real_part) > 1e-12:
+                cleaned_roots.append(real_part)  # Return as real number
+            elif abs(real_part) < 1e-12 and abs(imag_part) < 1e-12:
+                cleaned_roots.append(0.0)  # Return as real zero
+            else:
+                cleaned_roots.append(complex(real_part, imag_part))
+        else:
+            cleaned_roots.append(root if abs(root) > 1e-12 else 0.0)
+    
+    return cleaned_roots
 
 
 def main():
