@@ -35,6 +35,20 @@ def solve_quartic(a, b, c, d, e):
     if abs(a) < 1e-14:
         return solve_cubic(b, c, d, e)
     
+    # Pre-check: handle biquadratic pattern early using depressed form
+    try:
+        p = b / a
+        q = c / a
+        r = d / a
+        s = e / a
+        P = q - 3*p*p/8
+        Q = r - p*q/2 + p*p*p/8
+        R = s - p*r/4 + p*p*q/16 - 3*p*p*p*p/256
+        if abs(Q) < 1e-9 * (1.0 + abs(P) + abs(R)):
+            return finalize_roots(solve_biquadratic(P, R, -p/4))
+    except Exception:
+        pass
+
     # Try trigonometric method first for better numerical stability
     try:
         trig_roots = solve_quartic_trigonometric(a, b, c, d, e)
@@ -49,76 +63,72 @@ def solve_quartic(a, b, c, d, e):
 
 def solve_quartic_resolvent(a, b, c, d, e):
     """Solve quartic using resolvent cubic method"""
-    roots = []
-    
-    # Normalize to monic form: x^4 + px^3 + qx^2 + rx + s = 0
+    # Normalize to monic form: x^4 + p x^3 + q x^2 + r x + s = 0
     p = b / a
-    q = c / a  
+    q = c / a
     r = d / a
     s = e / a
-    
-    # Convert to depressed quartic: y^4 + Py^2 + Qy + R = 0
-    # Using substitution x = y - p/4
-    P = q - 3*p*p/8
-    Q = r - p*q/2 + p*p*p/8
-    R = s - p*r/4 + p*p*q/16 - 3*p*p*p*p/256
-    
-    # Special case: biquadratic (Q ≈ 0)
-    if abs(Q) < 1e-9 * (1.0 + abs(P) + abs(R)):
-        return solve_biquadratic(P, R, -p/4)
-    
-    # General case: use classic Ferrari with resolvent z and R/D/E
-    resolvent_roots = solve_cubic(1, -P, -4*R, 4*P*R - Q*Q)
 
-    best_roots = None
-    best_residual = float('inf')
+    # Depressed quartic y^4 + P y^2 + Q y + R = 0 via x = y - p/4
+    P = q - 3.0*(p*p)/8.0
+    Q = r - 0.5*p*q + (p*p*p)/8.0
+    R = s - 0.25*p*r + (p*p*q)/16.0 - 3.0*(p**4)/256.0
 
-    for z_candidate in resolvent_roots:
-        z = z_candidate.real if isinstance(z_candidate, complex) and abs(z_candidate.imag) < 1e-12 else z_candidate
-        if isinstance(z, complex):
-            continue
+    # Biquadratic shortcut
+    if abs(Q) < 1e-12 * (1.0 + abs(P) + abs(R)):
+        return solve_biquadratic(P, R, -p/4.0)
 
-        try:
-            R0 = sqrt_trigonometric(z/2)
-            if abs(R0) < 1e-14:
-                # If R0 ~ 0 and Q ≈ 0, this is biquadratic which we handled earlier
-                if abs(Q) > 1e-12:
-                    continue
-                D0 = sqrt_trigonometric(-z - 2*P)
-                E0 = D0
+    # Ferrari resolvent cubic: z^3 - P z^2 - 4 R z + (4 P R - Q^2) = 0
+    z_roots = solve_cubic(1.0, -P, -4.0*R, 4.0*P*R - Q*Q)
+
+    best_set = None
+    best_score = float('inf')
+
+    def real_part(x):
+        return x.real if isinstance(x, complex) else x
+
+    for z0 in z_roots:
+        # Prefer real z0; skip truly complex
+        if isinstance(z0, complex):
+            if abs(z0.imag) > 1e-10:
+                continue
+            z0 = z0.real
+
+        s2 = 2.0*z0 - P
+        s_val = sqrt_trigonometric(s2)
+
+        # Compute t and u safely
+        if abs(s_val) > 1e-14:
+            t_val = z0 - Q / s_val
+            u_val = z0 + Q / s_val
+        else:
+            t_val = z0
+            u_val = z0
+
+        # Heuristic score: penalize negative real parts for s2, t, u (aim for real roots when possible)
+        score = 0.0
+        for v in (s2, t_val, u_val):
+            vr = real_part(v)
+            if isinstance(vr, (int, float)):
+                score += max(0.0, -vr)
             else:
-                D0 = sqrt_trigonometric(-2*P - z + Q/R0)
-                E0 = sqrt_trigonometric(-2*P - z - Q/R0)
+                score += 1.0  # penalize complex
 
-            y_candidates = [
-                0.5*(R0 + D0),
-                0.5*(R0 - D0),
-                0.5*(-R0 + E0),
-                0.5*(-R0 - E0),
-            ]
+        # Build candidate roots
+        y_roots = solve_quadratic(1.0, s_val, t_val) + solve_quadratic(1.0, -s_val, u_val)
+        x_roots = [y + (-p/4.0) for y in y_roots]
 
-            shift = -p/4
-            candidate_roots = [y + shift for y in y_candidates]
+        # Add residual to score
+        res_sum = 0.0
+        for xr in x_roots:
+            res_sum += abs(a*xr**4 + b*xr**3 + c*xr**2 + d*xr + e)
+        score += res_sum
 
-            cleaned = []
-            for root in candidate_roots:
-                if isinstance(root, complex) and abs(root.imag) < 1e-12:
-                    cleaned.append(root.real)
-                else:
-                    cleaned.append(root)
+        if score < best_score:
+            best_score = score
+            best_set = x_roots
 
-            res_sum = 0.0
-            for r0 in cleaned:
-                val = a*(r0**4) + b*(r0**3) + c*(r0**2) + d*r0 + e
-                res_sum += abs(val)
-
-            if res_sum < best_residual:
-                best_residual = res_sum
-                best_roots = cleaned
-        except Exception:
-            continue
-
-    return best_roots if best_roots is not None else []
+    return best_set if best_set is not None else []
 
 
 def solve_quartic_trigonometric(a, b, c, d, e):
@@ -377,10 +387,34 @@ def solve_biquadratic(P, R, shift):
     return cleaned_roots
 
 
-def finalize_roots(roots, tol=1e-12):
-    """Convert nearly-real complex numbers to real floats and ensure consistent types."""
-    finalized = []
+def _snap_close_roots(roots, tol=1e-9):
+    """Snap numerically close roots to identical representatives to enforce multiplicities."""
+    snapped = []
+    reps = []
     for z in roots:
+        # normalize near-real
+        if isinstance(z, complex) and abs(z.imag) < tol:
+            z = z.real
+        if isinstance(z, (int, float)) and abs(z) < tol:
+            z = 0.0
+        # find representative
+        found = False
+        for i, r in enumerate(reps):
+            if abs(z - r) < tol:
+                snapped.append(reps[i])
+                found = True
+                break
+        if not found:
+            reps.append(z)
+            snapped.append(z)
+    return snapped
+
+
+def finalize_roots(roots, tol=1e-12):
+    """Convert nearly-real complex numbers to real floats and snap duplicates."""
+    snapped = _snap_close_roots(roots, tol=max(tol, 1e-10))
+    finalized = []
+    for z in snapped:
         if isinstance(z, complex) and abs(z.imag) < tol:
             finalized.append(z.real)
         else:
