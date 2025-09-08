@@ -49,16 +49,23 @@ def solve_quartic(a, b, c, d, e):
     except Exception:
         pass
 
-    # Try trigonometric method first for better numerical stability
+    # Prefer resolvent method; if it produces poor residuals, try trig variant
+    try:
+        res_roots = solve_quartic_resolvent(a, b, c, d, e)
+        if verify_quartic_roots(res_roots, [a, b, c, d, e]) and len(res_roots) == 4:
+            return finalize_roots(res_roots)
+    except:
+        pass
+
     try:
         trig_roots = solve_quartic_trigonometric(a, b, c, d, e)
         if verify_quartic_roots(trig_roots, [a, b, c, d, e]) and len(trig_roots) == 4:
             return finalize_roots(trig_roots)
     except:
         pass
-    
-    # Fallback to resolvent cubic method
-    return finalize_roots(solve_quartic_resolvent(a, b, c, d, e))
+
+    # As a last resort, return whatever resolvent produced (possibly fewer roots)
+    return finalize_roots(res_roots if 'res_roots' in locals() else [])
 
 
 def solve_quartic_resolvent(a, b, c, d, e):
@@ -81,52 +88,51 @@ def solve_quartic_resolvent(a, b, c, d, e):
     # Ferrari resolvent cubic: z^3 - P z^2 - 4 R z + (4 P R - Q^2) = 0
     z_roots = solve_cubic(1.0, -P, -4.0*R, 4.0*P*R - Q*Q)
 
-    best_set = None
-    best_score = float('inf')
+    candidate_sets = []
 
-    def real_part(x):
-        return x.real if isinstance(x, complex) else x
-
+    # From resolvent roots, try both signs of s and build candidates
     for z0 in z_roots:
-        # Prefer real z0; skip truly complex
+        # Use nearly-real z0 only
         if isinstance(z0, complex):
             if abs(z0.imag) > 1e-10:
                 continue
             z0 = z0.real
 
         s2 = 2.0*z0 - P
-        s_val = sqrt_trigonometric(s2)
+        s_main = sqrt_trigonometric(s2)
+        s_candidates = [s_main]
+        if abs(s_main) > 1e-14:
+            s_candidates.append(-s_main)
 
-        # Compute t and u safely
-        if abs(s_val) > 1e-14:
-            t_val = z0 - Q / s_val
-            u_val = z0 + Q / s_val
-        else:
-            t_val = z0
-            u_val = z0
-
-        # Heuristic score: penalize negative real parts for s2, t, u (aim for real roots when possible)
-        score = 0.0
-        for v in (s2, t_val, u_val):
-            vr = real_part(v)
-            if isinstance(vr, (int, float)):
-                score += max(0.0, -vr)
+        for s_val in s_candidates:
+            if abs(s_val) <= 1e-14 and abs(Q) > 1e-14:
+                continue
+            if abs(s_val) > 1e-14:
+                t_val = z0 - Q / s_val
+                u_val = z0 + Q / s_val
             else:
-                score += 1.0  # penalize complex
+                t_val = z0
+                u_val = z0
 
-        # Build candidate roots
-        y_roots = solve_quadratic(1.0, s_val, t_val) + solve_quadratic(1.0, -s_val, u_val)
-        x_roots = [y + (-p/4.0) for y in y_roots]
+            y_roots = solve_quadratic(1.0, s_val, t_val) + solve_quadratic(1.0, -s_val, u_val)
+            x_roots = [y + (-p/4.0) for y in y_roots]
+            candidate_sets.append(x_roots)
 
-        # Add residual to score
+    # Also add candidates from the trigonometric Ferrari variant and pick best by residual
+    trig_candidates = solve_quartic_ferrari_trigonometric(P, Q, R, -p/4.0)
+    if trig_candidates:
+        candidate_sets.append(trig_candidates)
+
+    # Choose the candidate set with the smallest residual sum
+    best_set = None
+    best_res = float('inf')
+    for roots_set in candidate_sets:
         res_sum = 0.0
-        for xr in x_roots:
+        for xr in roots_set:
             res_sum += abs(a*xr**4 + b*xr**3 + c*xr**2 + d*xr + e)
-        score += res_sum
-
-        if score < best_score:
-            best_score = score
-            best_set = x_roots
+        if res_sum < best_res:
+            best_res = res_sum
+            best_set = roots_set
 
     return best_set if best_set is not None else []
 
