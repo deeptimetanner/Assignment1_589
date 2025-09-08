@@ -12,7 +12,20 @@ def solve_quartic(a, b, c, d, e):
     if abs(a) < 1e-14:
         return solve_cubic(b, c, d, e)
     
-    # Try trigonometric method first for better numerical stability
+    # Check if this is a biquadratic case (Q = 0 in depressed form)
+    # Convert to depressed quartic to check
+    p = b / a
+    q = c / a  
+    r = d / a
+    s = e / a
+    
+    Q = r - p*q/2 + p*p*p/8
+    
+    # If it's biquadratic, use the resolvent method which handles multiplicity correctly
+    if abs(Q) < 1e-14:
+        return solve_quartic_resolvent(a, b, c, d, e)
+    
+    # Try trigonometric method first for non-biquadratic cases
     try:
         trig_roots = solve_quartic_trigonometric(a, b, c, d, e)
         if verify_quartic_roots(trig_roots, [a, b, c, d, e]):
@@ -279,26 +292,42 @@ def solve_biquadratic(P, R, shift):
     # Substitute z = y^2 to get z^2 + P*z + R = 0
     z_roots = solve_quadratic(1, P, R)
     
-    roots = []
-    for z in z_roots:
-        if isinstance(z, complex):
-            if z.real >= 0 and abs(z.imag) < 1e-10:
-                # Positive real z
-                sqrt_z = sqrt_trigonometric(z.real)
-                roots.extend([sqrt_z + shift, -sqrt_z + shift])
-            else:
-                # Complex z
-                sqrt_z = sqrt_trigonometric(z)
-                roots.extend([sqrt_z + shift, -sqrt_z + shift])
-        else:
-            if z >= 0:
-                sqrt_z = sqrt_trigonometric(z)
-                roots.extend([sqrt_z + shift, -sqrt_z + shift])
-            else:
-                sqrt_z = sqrt_trigonometric(z + 0j)
-                roots.extend([sqrt_z + shift, -sqrt_z + shift])
+    # Check for perfect square case: P^2 - 4R = 0 means (y^2 + P/2)^2 = 0
+    discriminant = P*P - 4*R
     
-    return roots
+    if abs(discriminant) < 1e-12:
+        # Perfect square case: only return the 2 roots from sqrt(-P/2)
+        z = -P/2
+        sqrt_z = sqrt_trigonometric(z + 0j)
+        return [sqrt_z + shift, -sqrt_z + shift]
+    else:
+        # Regular case: return all 4 roots from both z values
+        roots = []
+        for z in z_roots:
+            if isinstance(z, complex):
+                if z.real >= 0 and abs(z.imag) < 1e-10:
+                    # Positive real z
+                    sqrt_z = sqrt_trigonometric(z.real)
+                    if abs(z.real) > 1e-12:  
+                        roots.extend([sqrt_z + shift, -sqrt_z + shift])
+                    else:
+                        roots.append(shift)  # z ≈ 0
+                else:
+                    # Complex z
+                    sqrt_z = sqrt_trigonometric(z)
+                    roots.extend([sqrt_z + shift, -sqrt_z + shift])
+            else:
+                if abs(z) > 1e-12:
+                    if z > 0:
+                        sqrt_z = sqrt_trigonometric(z)
+                        roots.extend([sqrt_z + shift, -sqrt_z + shift])
+                    else:
+                        sqrt_z = sqrt_trigonometric(z + 0j)
+                        roots.extend([sqrt_z + shift, -sqrt_z + shift])
+                else:
+                    roots.append(shift)  # z ≈ 0
+        
+        return roots
 
 
 def main():
