@@ -30,7 +30,7 @@ def solve_cubic(a, b, c, d):
             t_roots = [0.0, 0.0, 0.0]  # Triple root
         else:
             # Real cube root using exponential
-            if q_new < 0:
+            if isinstance(q_new, (int, float)) and q_new < 0:
                 t_roots = [cmath.exp(cmath.log(-q_new)/3).real]
             else:
                 t_roots = [-cmath.exp(cmath.log(q_new)/3).real]
@@ -62,7 +62,7 @@ def solve_cubic(a, b, c, d):
             cosh_3u = abs(3*q_new / (p_new * m))
             u = math.acosh(cosh_3u) / 3
             
-            if q_new > 0:
+            if isinstance(q_new, (int, float)) and q_new > 0:
                 t_real = -m * math.cosh(u)
             else:
                 t_real = m * math.cosh(u)
@@ -111,7 +111,7 @@ def sqrt_trigonometric(x):
         except (ValueError, OverflowError):
             return 0+0j
     else:
-        if x < 0:
+        if isinstance(x, (int, float)) and x < 0:
             # Return complex result for negative real numbers
             try:
                 return 1j * cmath.exp(0.5 * cmath.log(-x)).real

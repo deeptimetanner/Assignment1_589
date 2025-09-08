@@ -221,11 +221,11 @@ def compute_quartic_factors(z, P, Q, force_real=False):
         if abs(alpha) > 1e-14 and abs(Q) > 1e-14:
             gamma = Q / (2 * alpha)
             # Choose beta sign to satisfy the quartic factorization
-            if gamma < 0:
+            if isinstance(gamma, (int, float)) and gamma < 0:
                 beta = -beta
                 
         # Handle the case where original z was negative (common in our problem)
-        if z < 0:
+        if isinstance(z, (int, float)) and z < 0:
             # For negative z, we need to handle the square root carefully
             # Use the fact that sqrt(-|z|) = i*sqrt(|z|)
             # But we're forcing real, so we work with the magnitude
@@ -318,7 +318,7 @@ def solve_biquadratic(P, R, shift):
                     roots.extend([sqrt_z + shift, -sqrt_z + shift])
             else:
                 if abs(z) > 1e-12:
-                    if z > 0:
+                    if isinstance(z, (int, float)) and z > 0:
                         sqrt_z = sqrt_trigonometric(z)
                         roots.extend([sqrt_z + shift, -sqrt_z + shift])
                     else:

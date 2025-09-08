@@ -58,9 +58,9 @@ def solve_ladder_algebraic(L1, L2, h):
             else:
                 continue  # Skip complex roots
         
-        if u > 0:  # u must be positive
+        if isinstance(u, (int, float)) and u > 0:  # u must be positive
             xi = a - u**2
-            if xi > 0:  # ξ must be positive for physical solution
+            if isinstance(xi, (int, float)) and xi > 0:  # ξ must be positive for physical solution
                 w = h * sqrt_trigonometric(xi)
                 valid_solutions.append(w)
     
