@@ -129,7 +129,12 @@ def solve_quartic_resolvent(a, b, c, d, e):
     if trig_candidates:
         candidate_sets.append(trig_candidates)
 
-    # Choose the candidate set with the smallest residual sum
+    # Early accept: if any candidate set verifies exactly, return immediately
+    for roots_set in candidate_sets:
+        if verify_quartic_roots(roots_set, [a, b, c, d, e], tolerance=1e-8):
+            return roots_set
+
+    # Otherwise choose the set with smallest residual
     best_set = None
     best_res = float('inf')
     for roots_set in candidate_sets:

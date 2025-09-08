@@ -83,31 +83,26 @@ def solve_cubic(a, b, c, d):
 
 def sqrt_trigonometric(x):
     """Compute square root using trigonometric substitution"""
-    if isinstance(x, complex):
-        # For complex numbers, use exponential form
-        if x == 0:
-            return 0+0j
-        # sqrt(z) = exp(ln(z)/2)
-        try:
-            return cmath.exp(0.5 * cmath.log(x))
-        except (ValueError, OverflowError):
-            return 0+0j
-    else:
-        if isinstance(x, (int, float)) and x < 0:
-            # Return complex result for negative real numbers
+    # Fast real path
+    if not isinstance(x, complex):
+        if x < 0:
             try:
-                return 1j * cmath.exp(0.5 * cmath.log(-x)).real
+                return 1j * math.exp(0.5 * math.log(-x))
             except (ValueError, OverflowError):
                 return 0+0j
-        elif x == 0:
+        if x == 0:
             return 0.0
-        else:
-            # Use exp(ln(x)/2) instead of sqrt
-            try:
-                result = cmath.exp(0.5 * cmath.log(x))
-                return result.real if abs(result.imag) < 1e-14 else result
-            except (ValueError, OverflowError):
-                return 0.0
+        try:
+            return math.exp(0.5 * math.log(x))
+        except (ValueError, OverflowError):
+            return 0.0
+    # Complex path: sqrt(z) = exp(ln(z)/2)
+    if x == 0:
+        return 0+0j
+    try:
+        return cmath.exp(0.5 * cmath.log(x))
+    except (ValueError, OverflowError):
+        return 0+0j
 
 def solve_quadratic(a, b, c):
     """Solve a*x^2 + b*x + c = 0 using Chebyshev's method without radicals"""
