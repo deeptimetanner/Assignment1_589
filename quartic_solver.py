@@ -3,7 +3,7 @@ from cubic_solver import solve_cubic, solve_quadratic, sqrt_trigonometric
 
 def solve_quartic(a, b, c, d, e):
     """Solve a*x^4 + b*x^3 + c*x^2 + d*x + e = 0.
-    Returns a list of 1..4 roots (real numbers or complex numbers).
+    Returns a list of 4 roots (real numbers or complex numbers) with multiplicity.
     If the leading coefficients are zero the function will
     handle lower-degree polynomials automatically.
     Uses multiple methods: resolvent cubic and direct trigonometric.
@@ -12,23 +12,10 @@ def solve_quartic(a, b, c, d, e):
     if abs(a) < 1e-14:
         return solve_cubic(b, c, d, e)
     
-    # Check if this is a biquadratic case (Q = 0 in depressed form)
-    # Convert to depressed quartic to check
-    p = b / a
-    q = c / a  
-    r = d / a
-    s = e / a
-    
-    Q = r - p*q/2 + p*p*p/8
-    
-    # If it's biquadratic, use the resolvent method which handles multiplicity correctly
-    if abs(Q) < 1e-14:
-        return solve_quartic_resolvent(a, b, c, d, e)
-    
-    # Try trigonometric method first for non-biquadratic cases
+    # Try trigonometric method first for better numerical stability
     try:
         trig_roots = solve_quartic_trigonometric(a, b, c, d, e)
-        if verify_quartic_roots(trig_roots, [a, b, c, d, e]):
+        if verify_quartic_roots(trig_roots, [a, b, c, d, e]) and len(trig_roots) == 4:
             return trig_roots
     except:
         pass
@@ -292,17 +279,17 @@ def solve_biquadratic(P, R, shift):
     # Substitute z = y^2 to get z^2 + P*z + R = 0
     z_roots = solve_quadratic(1, P, R)
     
-    # Check for perfect square case: P^2 - 4R = 0 means (y^2 + P/2)^2 = 0
+    roots = []
     discriminant = P*P - 4*R
     
     if abs(discriminant) < 1e-12:
-        # Perfect square case: only return the 2 roots from sqrt(-P/2)
+        # Perfect square case: (y^2 + P/2)^2 = 0, double root with multiplicity 2 each
         z = -P/2
         sqrt_z = sqrt_trigonometric(z + 0j)
-        return [sqrt_z + shift, -sqrt_z + shift]
+        # Return all 4 roots with multiplicity: each sqrt appears twice
+        roots = [sqrt_z + shift, sqrt_z + shift, -sqrt_z + shift, -sqrt_z + shift]
     else:
         # Regular case: return all 4 roots from both z values
-        roots = []
         for z in z_roots:
             if isinstance(z, complex):
                 if z.real >= 0 and abs(z.imag) < 1e-10:
@@ -311,7 +298,8 @@ def solve_biquadratic(P, R, shift):
                     if abs(z.real) > 1e-12:  
                         roots.extend([sqrt_z + shift, -sqrt_z + shift])
                     else:
-                        roots.append(shift)  # z ≈ 0
+                        # z ≈ 0, double root at origin
+                        roots.extend([shift, shift])
                 else:
                     # Complex z
                     sqrt_z = sqrt_trigonometric(z)
@@ -325,9 +313,10 @@ def solve_biquadratic(P, R, shift):
                         sqrt_z = sqrt_trigonometric(z + 0j)
                         roots.extend([sqrt_z + shift, -sqrt_z + shift])
                 else:
-                    roots.append(shift)  # z ≈ 0
-        
-        return roots
+                    # z ≈ 0, double root at origin  
+                    roots.extend([shift, shift])
+    
+    return roots
 
 
 def main():
