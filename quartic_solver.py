@@ -39,12 +39,12 @@ def solve_quartic(a, b, c, d, e):
     try:
         trig_roots = solve_quartic_trigonometric(a, b, c, d, e)
         if verify_quartic_roots(trig_roots, [a, b, c, d, e]) and len(trig_roots) == 4:
-            return trig_roots
+            return finalize_roots(trig_roots)
     except:
         pass
     
     # Fallback to resolvent cubic method
-    return solve_quartic_resolvent(a, b, c, d, e)
+    return finalize_roots(solve_quartic_resolvent(a, b, c, d, e))
 
 
 def solve_quartic_resolvent(a, b, c, d, e):
@@ -63,51 +63,62 @@ def solve_quartic_resolvent(a, b, c, d, e):
     Q = r - p*q/2 + p*p*p/8
     R = s - p*r/4 + p*p*q/16 - 3*p*p*p*p/256
     
-    # Special case: biquadratic (Q = 0)
-    if abs(Q) < 1e-14:
+    # Special case: biquadratic (Q ≈ 0)
+    if abs(Q) < 1e-9 * (1.0 + abs(P) + abs(R)):
         return solve_biquadratic(P, R, -p/4)
     
-    # General case: solve using resolvent cubic
-    # Resolvent cubic: z^3 - Pz^2 - 4Rz + (4PR - Q^2) = 0
+    # General case: use classic Ferrari with resolvent z and R/D/E
     resolvent_roots = solve_cubic(1, -P, -4*R, 4*P*R - Q*Q)
-    
-    # Choose the best resolvent root for numerical stability
-    z = choose_best_resolvent_root(resolvent_roots, P, Q)
-    
-    # Calculate intermediate values with forced real arithmetic for problematic cases
-    alpha, beta = compute_quartic_factors(z, P, Q, force_real=True)
-    
-    # Solve two quadratics: y^2 + alpha*y + (z-P)/2 + beta/2 = 0
-    #                  and: y^2 - alpha*y + (z-P)/2 - beta/2 = 0
-    
-    a1 = 1
-    b1 = alpha
-    c1 = (z - P)/2 - beta/2
-    
-    a2 = 1  
-    b2 = -alpha
-    c2 = (z - P)/2 + beta/2
-    
-    # Solve both quadratics
-    roots1 = solve_quadratic(a1, b1, c1)
-    roots2 = solve_quadratic(a2, b2, c2)
-    
-    # Collect all roots and transform back: x = y - p/4
-    shift = -p/4
-    all_y_roots = roots1 + roots2
-    
-    for y in all_y_roots:
-        roots.append(y + shift)
-    
-    # Clean up nearly-real roots to pure real numbers
-    cleaned_roots = []
-    for root in roots:
-        if isinstance(root, complex) and abs(root.imag) < 1e-12:
-            cleaned_roots.append(root.real)
-        else:
-            cleaned_roots.append(root)
-    
-    return cleaned_roots
+
+    best_roots = None
+    best_residual = float('inf')
+
+    for z_candidate in resolvent_roots:
+        z = z_candidate.real if isinstance(z_candidate, complex) and abs(z_candidate.imag) < 1e-12 else z_candidate
+        if isinstance(z, complex):
+            continue
+
+        try:
+            R0 = sqrt_trigonometric(z/2)
+            if abs(R0) < 1e-14:
+                # If R0 ~ 0 and Q ≈ 0, this is biquadratic which we handled earlier
+                if abs(Q) > 1e-12:
+                    continue
+                D0 = sqrt_trigonometric(-z - 2*P)
+                E0 = D0
+            else:
+                D0 = sqrt_trigonometric(-2*P - z + Q/R0)
+                E0 = sqrt_trigonometric(-2*P - z - Q/R0)
+
+            y_candidates = [
+                0.5*(R0 + D0),
+                0.5*(R0 - D0),
+                0.5*(-R0 + E0),
+                0.5*(-R0 - E0),
+            ]
+
+            shift = -p/4
+            candidate_roots = [y + shift for y in y_candidates]
+
+            cleaned = []
+            for root in candidate_roots:
+                if isinstance(root, complex) and abs(root.imag) < 1e-12:
+                    cleaned.append(root.real)
+                else:
+                    cleaned.append(root)
+
+            res_sum = 0.0
+            for r0 in cleaned:
+                val = a*(r0**4) + b*(r0**3) + c*(r0**2) + d*r0 + e
+                res_sum += abs(val)
+
+            if res_sum < best_residual:
+                best_residual = res_sum
+                best_roots = cleaned
+        except Exception:
+            continue
+
+    return best_roots if best_roots is not None else []
 
 
 def solve_quartic_trigonometric(a, b, c, d, e):
@@ -293,7 +304,7 @@ def solve_biquadratic(P, R, shift):
     roots = []
     discriminant = P*P - 4*R
     
-    if abs(discriminant) < 1e-12:
+    if abs(discriminant) < 1e-9:
         # Perfect square case: (y^2 + P/2)^2 = 0, double root with multiplicity 2 each
         z = -P/2
         sqrt_z = sqrt_trigonometric(z + 0j)
@@ -364,6 +375,17 @@ def solve_biquadratic(P, R, shift):
             cleaned_roots.append(root if abs(root) > 1e-12 else 0.0)
     
     return cleaned_roots
+
+
+def finalize_roots(roots, tol=1e-12):
+    """Convert nearly-real complex numbers to real floats and ensure consistent types."""
+    finalized = []
+    for z in roots:
+        if isinstance(z, complex) and abs(z.imag) < tol:
+            finalized.append(z.real)
+        else:
+            finalized.append(z)
+    return finalized
 
 
 def main():

@@ -21,8 +21,8 @@ def solve_cubic(a, b, c, d):
     p_new = q - p*p/3
     q_new = r - p*q/3 + 2*p*p*p/27
     
-    # Discriminant
-    discriminant = -(4*p_new*p_new*p_new + 27*q_new*q_new)
+    # Use depressed cubic invariants
+    Delta = (q_new/2)**2 + (p_new/3)**3
     
     if abs(p_new) < 1e-14:
         # Special case: t^3 + q = 0
@@ -38,60 +38,37 @@ def solve_cubic(a, b, c, d):
             # omega = exp(2*pi*i/3) = cos(2*pi/3) + i*sin(2*pi/3)
             omega = cmath.exp(2j * cmath.pi / 3)
             t_roots.extend([t_roots[0] * omega, t_roots[0] * omega.conjugate()])
-    elif discriminant > 0:
-        # Three distinct real roots - use trigonometric method
-        # t^3 + pt + q = 0 with p < 0
-        m = 2 * sqrt_trigonometric(-p_new/3)
-        # Ensure m is real for acos path
-        m_val = m.real if isinstance(m, complex) else m
-        # cos(3*theta) = 3*q_new / (p_new * m)
-        cos_3theta = 3*q_new / (p_new * m_val)
-        # If numerical noise made cos_3theta complex with tiny imag, drop it
-        if isinstance(cos_3theta, complex):
-            cos_3theta = cos_3theta.real
-        
-        # Clamp to valid range for acos
-        cos_3theta = max(-1.0, min(1.0, float(cos_3theta)))
-        
-        theta = math.acos(cos_3theta) / 3
-        
-        t_roots = [
-            m * math.cos(theta),
-            m * math.cos(theta + 2*math.pi/3),
-            m * math.cos(theta + 4*math.pi/3)
-        ]
     else:
-        # One real root, two complex roots - use hyperbolic method
-        if abs(p_new) > 1e-14:
-            m = 2 * sqrt_trigonometric(abs(p_new)/3)
-            cosh_3u = abs(3*q_new / (p_new * m))
-            u = math.acosh(cosh_3u) / 3
-            
-            if isinstance(q_new, (int, float)) and q_new > 0:
-                t_real = -m * math.cosh(u)
-            else:
-                t_real = m * math.cosh(u)
-                
-            t_roots = [t_real]
-            
-            # Complex roots using the cubic formula
-            # For complex roots when discriminant < 0
-            sqrt_disc = sqrt_trigonometric(discriminant + 0j)
-            sqrt_27 = sqrt_trigonometric(27+0j)
-            alpha = (-q_new + sqrt_disc/sqrt_27) / 2
-            beta = (-q_new - sqrt_disc/sqrt_27) / 2
-            
-            # Cube root using exponential: x^(1/3) = exp(ln(x)/3)
-            alpha_cbrt = cmath.exp(cmath.log(alpha)/3) if alpha != 0 else 0
-            beta_cbrt = cmath.exp(cmath.log(beta)/3) if beta != 0 else 0
-            
-            # omega = exp(2*pi*i/3) = cos(2*pi/3) + i*sin(2*pi/3)
+        # Determine path: if invariants real and Delta < 0 -> 3 real (trig), else general Cardano
+        invariants_real = isinstance(p_new, (int, float)) and isinstance(q_new, (int, float))
+        if invariants_real and Delta < 0:
+            # Three distinct real roots - trigonometric method (p_new < 0 here)
+            m = 2 * sqrt_trigonometric(-p_new/3)
+            m_val = m.real if isinstance(m, complex) else m
+            cos_3theta = 3*q_new / (p_new * m_val)
+            if isinstance(cos_3theta, complex):
+                cos_3theta = cos_3theta.real
+            cos_3theta = max(-1.0, min(1.0, float(cos_3theta)))
+            theta = math.acos(cos_3theta) / 3
+            t_roots = [
+                m_val * math.cos(theta),
+                m_val * math.cos(theta + 2*math.pi/3),
+                m_val * math.cos(theta + 4*math.pi/3)
+            ]
+        else:
+            # General Cardano with complex arithmetic
+            Delta_c = Delta if isinstance(Delta, complex) else complex(Delta, 0.0)
+            sqrt_D = sqrt_trigonometric(Delta_c)
+            u_c = -q_new/2 + sqrt_D
+            v_c = -q_new/2 - sqrt_D
+            u = cmath.exp(cmath.log(u_c)/3) if u_c != 0 else 0
+            v = cmath.exp(cmath.log(v_c)/3) if v_c != 0 else 0
+            t1 = u + v
+            # Other roots via cube roots of unity
             omega = cmath.exp(2j * cmath.pi / 3)
-            
-            t_roots.extend([
-                alpha_cbrt * omega + beta_cbrt * omega.conjugate(),
-                alpha_cbrt * omega.conjugate() + beta_cbrt * omega
-            ])
+            t2 = u*omega + v*omega.conjugate()
+            t3 = u*omega.conjugate() + v*omega
+            t_roots = [t1, t2, t3]
     
     # Convert back to original variable: x = t - p/3
     shift = -p / 3
