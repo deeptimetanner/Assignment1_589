@@ -82,11 +82,11 @@ def solve_quartic_resolvent(a, b, c, d, e):
     
     a1 = 1
     b1 = alpha
-    c1 = (z - beta)/2
+    c1 = (z - P)/2 - beta/2
     
     a2 = 1  
     b2 = -alpha
-    c2 = (z + beta)/2
+    c2 = (z - P)/2 + beta/2
     
     # Solve both quadratics
     roots1 = solve_quadratic(a1, b1, c1)
@@ -99,7 +99,15 @@ def solve_quartic_resolvent(a, b, c, d, e):
     for y in all_y_roots:
         roots.append(y + shift)
     
-    return roots
+    # Clean up nearly-real roots to pure real numbers
+    cleaned_roots = []
+    for root in roots:
+        if isinstance(root, complex) and abs(root.imag) < 1e-12:
+            cleaned_roots.append(root.real)
+        else:
+            cleaned_roots.append(root)
+    
+    return cleaned_roots
 
 
 def solve_quartic_trigonometric(a, b, c, d, e):
