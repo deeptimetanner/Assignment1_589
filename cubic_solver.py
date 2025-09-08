@@ -1,4 +1,5 @@
 import math, cmath
+from functools import lru_cache
 
 def solve_cubic(a, b, c, d):
     """Solve a*x^3 + b*x^2 + c*x + d = 0
@@ -81,6 +82,7 @@ def solve_cubic(a, b, c, d):
     return roots
 
 
+@lru_cache(maxsize=1024)
 def sqrt_trigonometric(x):
     """Compute square root using trigonometric substitution"""
     # Fast real path

@@ -88,15 +88,19 @@ def solve_quartic_resolvent(a, b, c, d, e):
     # Standard Ferrari resolvent cubic: z^3 - P z^2 - 4 R z + (4 P R - Q^2) = 0
     z_candidates = solve_cubic(1.0, -P, -4.0*R, 4.0*P*R - Q*Q)
 
-    candidate_sets = []
+    best_set = None
+    best_res = float('inf')
 
     def residual_sum(roots_set):
+        # Compute polynomial via Horner for slight speed
         sres = 0.0
         for xr in roots_set:
-            sres += abs(a*xr**4 + b*xr**3 + c*xr**2 + d*xr + e)
+            p = ((a*xr + b)*xr + c)*xr + d
+            p = p*xr + e
+            sres += abs(p)
         return sres
 
-    # From each resolvent root, enumerate multiple branch combinations
+    # From each resolvent root, build candidate and early-verify
     for z0 in z_candidates:
         # Use nearly-real z0 only
         if isinstance(z0, complex):
@@ -122,27 +126,20 @@ def solve_quartic_resolvent(a, b, c, d, e):
         y_roots_1 = solve_quadratic(1.0, S, e_const)
         y_roots_2 = solve_quadratic(1.0, -S, f_const)
         x_roots = [y + (-p/4.0) for y in (y_roots_1 + y_roots_2)]
-        candidate_sets.append(x_roots)
+        # Early accept if they verify
+        if verify_quartic_roots(x_roots, [a, b, c, d, e], tolerance=1e-8):
+            return x_roots
+        # Track best residual
+        res = residual_sum(x_roots)
+        if res < best_res:
+            best_res = res
+            best_set = x_roots
 
-    # Also add candidate from trigonometric variant
+    # Fallback: try trig variant only if none verified
     trig_candidates = solve_quartic_ferrari_trigonometric(P, Q, R, -p/4.0)
-    if trig_candidates:
-        candidate_sets.append(trig_candidates)
-
-    # Early accept: if any candidate set verifies exactly, return immediately
-    for roots_set in candidate_sets:
-        if verify_quartic_roots(roots_set, [a, b, c, d, e], tolerance=1e-8):
-            return roots_set
-
-    # Otherwise choose the set with smallest residual
-    best_set = None
-    best_res = float('inf')
-    for roots_set in candidate_sets:
-        res_sum = residual_sum(roots_set)
-        if res_sum < best_res:
-            best_res = res_sum
-            best_set = roots_set
-
+    if trig_candidates and verify_quartic_roots(trig_candidates, [a, b, c, d, e], tolerance=1e-8):
+        return trig_candidates
+    # Choose the best of what we built
     return best_set if best_set is not None else []
 
 
