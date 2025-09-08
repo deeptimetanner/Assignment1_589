@@ -82,11 +82,11 @@ def solve_quartic_resolvent(a, b, c, d, e):
     
     a1 = 1
     b1 = alpha
-    c1 = (z - P)/2 + beta/2
+    c1 = (z - beta)/2
     
     a2 = 1  
     b2 = -alpha
-    c2 = (z - P)/2 - beta/2
+    c2 = (z + beta)/2
     
     # Solve both quadratics
     roots1 = solve_quadratic(a1, b1, c1)
@@ -214,45 +214,25 @@ def verify_quartic_roots(roots, coeffs, tolerance=1e-8):
 
 
 def compute_quartic_factors(z, P, Q, force_real=False):
-    """Compute alpha and beta with numerical stability"""
+    """Compute alpha and beta per Ferrari: alpha = sqrt(2*z - P), beta = Q/alpha."""
     
-    if force_real:
-        # Force real arithmetic when we expect real roots
-        # Use absolute value to force positive argument
-        z_real = abs(z) if isinstance(z, complex) else abs(z)
-        alpha = sqrt_trigonometric(z_real)
-        
-        beta_squared = z_real - P
-        if beta_squared < 0 and abs(beta_squared) < 1e-10:
-            beta_squared = 0  # Clean up roundoff error
-        beta = sqrt_trigonometric(abs(beta_squared))
-        
-        # Determine sign of beta using real arithmetic
-        if abs(alpha) > 1e-14 and abs(Q) > 1e-14:
-            gamma = Q / (2 * alpha)
-            # Choose beta sign to satisfy the quartic factorization
-            if isinstance(gamma, (int, float)) and gamma < 0:
-                beta = -beta
-                
-        # Handle the case where original z was negative (common in our problem)
-        if isinstance(z, (int, float)) and z < 0:
-            # For negative z, we need to handle the square root carefully
-            # Use the fact that sqrt(-|z|) = i*sqrt(|z|)
-            # But we're forcing real, so we work with the magnitude
-            pass  # alpha is already sqrt(|z|)
-            
+    z_c = complex(z)
+    P_c = complex(P)
+    Q_c = complex(Q)
+
+    alpha_sq = 2*z_c - P_c
+    alpha = sqrt_trigonometric(alpha_sq)
+
+    if abs(alpha) > 1e-14:
+        beta = Q_c / alpha
     else:
-        # Standard complex arithmetic
-        alpha = sqrt_trigonometric(z + 0j)
-        beta_squared = z - P
-        beta = sqrt_trigonometric(beta_squared + 0j)
-        
-        # Sign determination for complex case
-        if abs(alpha) > 1e-14:
-            gamma = Q / (2 * alpha)
-            if (beta * gamma).real < 0:
+        # Fallback if alpha ~ 0: use alternative beta estimate and keep alpha as computed
+        beta = sqrt_trigonometric(z_c - P_c)
+        if abs(beta) > 1e-14 and abs(Q_c) > 0:
+            gamma = Q_c / (2 * (alpha if abs(alpha) > 1e-14 else 1))
+            if (beta * gamma.conjugate()).real < 0:
                 beta = -beta
-    
+
     return alpha, beta
 
 

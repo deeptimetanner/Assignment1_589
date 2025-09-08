@@ -42,11 +42,16 @@ def solve_cubic(a, b, c, d):
         # Three distinct real roots - use trigonometric method
         # t^3 + pt + q = 0 with p < 0
         m = 2 * sqrt_trigonometric(-p_new/3)
+        # Ensure m is real for acos path
+        m_val = m.real if isinstance(m, complex) else m
         # cos(3*theta) = 3*q_new / (p_new * m)
-        cos_3theta = 3*q_new / (p_new * m)
+        cos_3theta = 3*q_new / (p_new * m_val)
+        # If numerical noise made cos_3theta complex with tiny imag, drop it
+        if isinstance(cos_3theta, complex):
+            cos_3theta = cos_3theta.real
         
         # Clamp to valid range for acos
-        cos_3theta = max(-1.0, min(1.0, cos_3theta))
+        cos_3theta = max(-1.0, min(1.0, float(cos_3theta)))
         
         theta = math.acos(cos_3theta) / 3
         
