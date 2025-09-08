@@ -85,40 +85,69 @@ def solve_quartic_resolvent(a, b, c, d, e):
     if abs(Q) < 1e-12 * (1.0 + abs(P) + abs(R)):
         return solve_biquadratic(P, R, -p/4.0)
 
-    # Ferrari resolvent cubic: z^3 - P z^2 - 4 R z + (4 P R - Q^2) = 0
-    z_roots = solve_cubic(1.0, -P, -4.0*R, 4.0*P*R - Q*Q)
+    # Collect z from multiple resolvent forms and de-duplicate
+    z_candidates = []
+    z_roots_A = solve_cubic(1.0, -P, -4.0*R, 4.0*P*R - Q*Q)
+    z_roots_B = solve_cubic(1.0, 2.0*P, P*P - 4.0*R, -Q*Q)
+    z_candidates.extend(z_roots_A)
+    z_candidates.extend(z_roots_B)
 
     candidate_sets = []
 
-    # From resolvent roots, try both signs of s and build candidates
-    for z0 in z_roots:
+    def residual_sum(roots_set):
+        sres = 0.0
+        for xr in roots_set:
+            sres += abs(a*xr**4 + b*xr**3 + c*xr**2 + d*xr + e)
+        return sres
+
+    # From each resolvent root, enumerate multiple branch combinations
+    for z0 in z_candidates:
         # Use nearly-real z0 only
         if isinstance(z0, complex):
             if abs(z0.imag) > 1e-10:
                 continue
             z0 = z0.real
 
-        s2 = 2.0*z0 - P
-        s_main = sqrt_trigonometric(s2)
-        s_candidates = [s_main]
+        s_sq = 2.0*z0 - P
+        s_main = sqrt_trigonometric(s_sq)
+        s_list = [s_main]
         if abs(s_main) > 1e-14:
-            s_candidates.append(-s_main)
+            s_list.append(-s_main)
 
-        for s_val in s_candidates:
-            if abs(s_val) <= 1e-14 and abs(Q) > 1e-14:
-                continue
+        for s_val in s_list:
+            # Variant 1: t/u formulation
             if abs(s_val) > 1e-14:
-                t_val = z0 - Q / s_val
-                u_val = z0 + Q / s_val
+                tu_pairs = [
+                    (z0 - Q/s_val, z0 + Q/s_val),  # (t, u)
+                    (z0 + Q/s_val, z0 - Q/s_val),  # swapped pairing
+                ]
             else:
-                t_val = z0
-                u_val = z0
+                tu_pairs = [(z0, z0)]
 
-            y_roots = solve_quadratic(1.0, s_val, t_val) + solve_quadratic(1.0, -s_val, u_val)
-            x_roots = [y + (-p/4.0) for y in y_roots]
+            for t_val, u_val in tu_pairs:
+                y_roots = solve_quadratic(1.0, s_val, t_val) + solve_quadratic(1.0, -s_val, u_val)
+                x_roots = [y + (-p/4.0) for y in y_roots]
+                candidate_sets.append(x_roots)
+
+            # Variant 2: correlated inner sqrt formulation (A±)
+            if abs(s_val) > 1e-14:
+                Aminus = -(2.0*z0 + P) - 2.0*Q/s_val
+                Aplus  = -(2.0*z0 + P) + 2.0*Q/s_val
+            else:
+                Aminus = -(2.0*z0 + P)
+                Aplus  = Aminus
+
+            r_minus = sqrt_trigonometric(Aminus)
+            r_plus  = sqrt_trigonometric(Aplus)
+
+            y1 = -0.5*( s_val + r_minus )
+            y2 = -0.5*( s_val - r_minus )
+            y3 =  0.5*( s_val + r_plus  )
+            y4 =  0.5*( s_val - r_plus  )
+            x_roots = [y1 - p/4.0, y2 - p/4.0, y3 - p/4.0, y4 - p/4.0]
             candidate_sets.append(x_roots)
 
-    # Also add candidates from the trigonometric Ferrari variant and pick best by residual
+    # Also add candidate from trigonometric variant
     trig_candidates = solve_quartic_ferrari_trigonometric(P, Q, R, -p/4.0)
     if trig_candidates:
         candidate_sets.append(trig_candidates)
@@ -127,9 +156,7 @@ def solve_quartic_resolvent(a, b, c, d, e):
     best_set = None
     best_res = float('inf')
     for roots_set in candidate_sets:
-        res_sum = 0.0
-        for xr in roots_set:
-            res_sum += abs(a*xr**4 + b*xr**3 + c*xr**2 + d*xr + e)
+        res_sum = residual_sum(roots_set)
         if res_sum < best_res:
             best_res = res_sum
             best_set = roots_set
