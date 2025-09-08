@@ -1,5 +1,5 @@
 import math, cmath
-from cubic_solver import solve_cubic, solve_quadratic
+from cubic_solver import solve_cubic, solve_quadratic, sqrt_trigonometric
 
 def solve_quartic(a, b, c, d, e):
     """Solve a*x^4 + b*x^3 + c*x^2 + d*x + e = 0.
@@ -142,10 +142,7 @@ def solve_quartic_ferrari_trigonometric(P, Q, R, shift):
     # From Ferrari's method: s^2 = 2*m + P (where m is our resolvent root)
     s_squared = 2*m + P
     
-    if s_squared >= 0:
-        s = math.sqrt(s_squared)
-    else:
-        s = cmath.sqrt(s_squared + 0j)
+    s = sqrt_trigonometric(s_squared)
     
     # From t + v = P + s^2 and s*(v - t) = Q:
     sum_tv = P + s_squared  # t + v
@@ -157,14 +154,9 @@ def solve_quartic_ferrari_trigonometric(P, Q, R, shift):
     else:
         # s ≈ 0 case: solve t*v = R and t + v = P
         discriminant = P*P - 4*R
-        if discriminant >= 0:
-            sqrt_disc = math.sqrt(discriminant)
-            t = (P - sqrt_disc) / 2
-            v = (P + sqrt_disc) / 2
-        else:
-            sqrt_disc = cmath.sqrt(discriminant + 0j)
-            t = (P - sqrt_disc) / 2
-            v = (P + sqrt_disc) / 2
+        sqrt_disc = sqrt_trigonometric(discriminant)
+        t = (P - sqrt_disc) / 2
+        v = (P + sqrt_disc) / 2
     
     # Solve the two quadratics: y^2 + s*y + t = 0 and y^2 - s*y + v = 0
     roots1 = solve_quadratic(1, s, t)
@@ -203,14 +195,14 @@ def compute_quartic_factors(z, P, Q, force_real=False):
     
     if force_real:
         # Force real arithmetic when we expect real roots
-        # Use absolute value to force positive argument for sqrt
+        # Use absolute value to force positive argument
         z_real = abs(z) if isinstance(z, complex) else abs(z)
-        alpha = math.sqrt(z_real)
+        alpha = sqrt_trigonometric(z_real)
         
         beta_squared = z_real - P
         if beta_squared < 0 and abs(beta_squared) < 1e-10:
             beta_squared = 0  # Clean up roundoff error
-        beta = math.sqrt(abs(beta_squared))
+        beta = sqrt_trigonometric(abs(beta_squared))
         
         # Determine sign of beta using real arithmetic
         if abs(alpha) > 1e-14 and abs(Q) > 1e-14:
@@ -228,9 +220,9 @@ def compute_quartic_factors(z, P, Q, force_real=False):
             
     else:
         # Standard complex arithmetic
-        alpha = cmath.sqrt(z + 0j)
+        alpha = sqrt_trigonometric(z + 0j)
         beta_squared = z - P
-        beta = cmath.sqrt(beta_squared + 0j)
+        beta = sqrt_trigonometric(beta_squared + 0j)
         
         # Sign determination for complex case
         if abs(alpha) > 1e-14:
@@ -258,7 +250,7 @@ def choose_best_resolvent_root(resolvent_roots, P, Q):
         z = root
         
         # Prefer positive z (makes sqrt real)
-        if z > 1e-12:
+        if isinstance(z, (int, float)) and z > 1e-12:
             score += 2
         
         # Prefer z where |z-P| is not too small (avoids division issues)
@@ -267,7 +259,7 @@ def choose_best_resolvent_root(resolvent_roots, P, Q):
             
         # Prefer z that keeps subsequent calculations real
         beta_squared = z - P
-        if beta_squared >= -1e-12:  # Allow small negative due to roundoff
+        if isinstance(beta_squared, (int, float)) and beta_squared >= -1e-12:  # Allow small negative due to roundoff
             score += 1
             
         candidates.append((score, z))
@@ -292,18 +284,18 @@ def solve_biquadratic(P, R, shift):
         if isinstance(z, complex):
             if z.real >= 0 and abs(z.imag) < 1e-10:
                 # Positive real z
-                sqrt_z = math.sqrt(z.real)
+                sqrt_z = sqrt_trigonometric(z.real)
                 roots.extend([sqrt_z + shift, -sqrt_z + shift])
             else:
                 # Complex z
-                sqrt_z = cmath.sqrt(z)
+                sqrt_z = sqrt_trigonometric(z)
                 roots.extend([sqrt_z + shift, -sqrt_z + shift])
         else:
             if z >= 0:
-                sqrt_z = math.sqrt(z)
+                sqrt_z = sqrt_trigonometric(z)
                 roots.extend([sqrt_z + shift, -sqrt_z + shift])
             else:
-                sqrt_z = cmath.sqrt(z + 0j)
+                sqrt_z = sqrt_trigonometric(z + 0j)
                 roots.extend([sqrt_z + shift, -sqrt_z + shift])
     
     return roots

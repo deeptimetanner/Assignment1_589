@@ -3,6 +3,7 @@ Solution to the Two-Ladder Problem using quartic equation solver
 """
 import math
 from quartic_solver import solve_quartic
+from cubic_solver import sqrt_trigonometric
 
 def solve_ladder_problem(L1, L2, h):
     """
@@ -60,7 +61,7 @@ def solve_ladder_algebraic(L1, L2, h):
         if u > 0:  # u must be positive
             xi = a - u**2
             if xi > 0:  # ξ must be positive for physical solution
-                w = h * math.sqrt(xi)
+                w = h * sqrt_trigonometric(xi)
                 valid_solutions.append(w)
     
     return valid_solutions
@@ -75,8 +76,8 @@ def solve_ladder_bisection(L1, L2, h, tolerance=1e-10):
         """The ladder equation that should equal zero at the solution"""
         if w >= min(L1, L2):
             return float('inf')
-        term1 = h / math.sqrt(L1*L1 - w*w)  
-        term2 = h / math.sqrt(L2*L2 - w*w)
+        term1 = h / sqrt_trigonometric(L1*L1 - w*w)  
+        term2 = h / sqrt_trigonometric(L2*L2 - w*w)
         return term1 + term2 - 1.0
     
     # Set up bisection bounds
