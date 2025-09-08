@@ -85,12 +85,8 @@ def solve_quartic_resolvent(a, b, c, d, e):
     if abs(Q) < 1e-12 * (1.0 + abs(P) + abs(R)):
         return solve_biquadratic(P, R, -p/4.0)
 
-    # Collect z from multiple resolvent forms and de-duplicate
-    z_candidates = []
-    z_roots_A = solve_cubic(1.0, -P, -4.0*R, 4.0*P*R - Q*Q)
-    z_roots_B = solve_cubic(1.0, 2.0*P, P*P - 4.0*R, -Q*Q)
-    z_candidates.extend(z_roots_A)
-    z_candidates.extend(z_roots_B)
+    # Standard Ferrari resolvent cubic: z^3 - P z^2 - 4 R z + (4 P R - Q^2) = 0
+    z_candidates = solve_cubic(1.0, -P, -4.0*R, 4.0*P*R - Q*Q)
 
     candidate_sets = []
 
@@ -108,44 +104,25 @@ def solve_quartic_resolvent(a, b, c, d, e):
                 continue
             z0 = z0.real
 
-        s_sq = 2.0*z0 - P
-        s_main = sqrt_trigonometric(s_sq)
-        s_list = [s_main]
-        if abs(s_main) > 1e-14:
-            s_list.append(-s_main)
+        # S = sqrt(z0 - P) per Ferrari factorization
+        S = sqrt_trigonometric(z0 - P)
+        if abs(S) < 1e-14 and abs(Q) > 1e-14:
+            # Avoid division by zero when Q != 0
+            continue
 
-        for s_val in s_list:
-            # Variant 1: t/u formulation
-            if abs(s_val) > 1e-14:
-                tu_pairs = [
-                    (z0 - Q/s_val, z0 + Q/s_val),  # (t, u)
-                    (z0 + Q/s_val, z0 - Q/s_val),  # swapped pairing
-                ]
-            else:
-                tu_pairs = [(z0, z0)]
+        if abs(S) > 1e-14:
+            e_const = (z0 - Q / S) / 2.0
+            f_const = (z0 + Q / S) / 2.0
+        else:
+            # Q ~ 0 handled by biquadratic path earlier; split evenly
+            e_const = z0 / 2.0
+            f_const = z0 / 2.0
 
-            for t_val, u_val in tu_pairs:
-                y_roots = solve_quadratic(1.0, s_val, t_val) + solve_quadratic(1.0, -s_val, u_val)
-                x_roots = [y + (-p/4.0) for y in y_roots]
-                candidate_sets.append(x_roots)
-
-            # Variant 2: correlated inner sqrt formulation (A±)
-            if abs(s_val) > 1e-14:
-                Aminus = -(2.0*z0 + P) - 2.0*Q/s_val
-                Aplus  = -(2.0*z0 + P) + 2.0*Q/s_val
-            else:
-                Aminus = -(2.0*z0 + P)
-                Aplus  = Aminus
-
-            r_minus = sqrt_trigonometric(Aminus)
-            r_plus  = sqrt_trigonometric(Aplus)
-
-            y1 = -0.5*( s_val + r_minus )
-            y2 = -0.5*( s_val - r_minus )
-            y3 =  0.5*( s_val + r_plus  )
-            y4 =  0.5*( s_val - r_plus  )
-            x_roots = [y1 - p/4.0, y2 - p/4.0, y3 - p/4.0, y4 - p/4.0]
-            candidate_sets.append(x_roots)
+        # Solve the two quadratics in y
+        y_roots_1 = solve_quadratic(1.0, S, e_const)
+        y_roots_2 = solve_quadratic(1.0, -S, f_const)
+        x_roots = [y + (-p/4.0) for y in (y_roots_1 + y_roots_2)]
+        candidate_sets.append(x_roots)
 
     # Also add candidate from trigonometric variant
     trig_candidates = solve_quartic_ferrari_trigonometric(P, Q, R, -p/4.0)
